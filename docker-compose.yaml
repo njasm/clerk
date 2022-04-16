@@ -1,0 +1,114 @@
+version: "3.9"
+
+services:
+  clerk:
+    container_name: clerk
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    environment:
+      - RUNNING_LOCAL=$${RUNNING_LOCAL:true}
+      - CONSUL_HTTP_ADDR=consul-server1:8500
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - consul
+    depends_on:
+      - consul1
+      - consul2
+      - consul-client
+    deploy:
+      resources:
+        limits:
+          cpus: '0.10'
+          memory: 256M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
+      restart_policy:
+        condition: on-failure
+
+  consul1:
+    container_name: consul-server1
+    image: hashicorp/consul:1.11.5
+    restart: always
+    volumes:
+      - ./resources/consul/server1.json:/consul/config/server1.json:ro
+      - ./resources/consul/certs/:/consul/config/certs/:ro
+    networks:
+      - consul
+    ports:
+      - "8500:8500"
+      - "8600:8600/tcp"
+      - "8600:8600/udp"
+    command: "agent -bootstrap-expect=2"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.05'
+          memory: 128M
+
+  consul2:
+    container_name: consul-server2
+    image: hashicorp/consul:1.11.5
+    restart: always
+    volumes:
+      - ./resources/consul/server2.json:/consul/config/server2.json:ro
+      - ./resources/consul/certs/:/consul/config/certs/:ro
+    networks:
+      - consul
+    command: "agent -bootstrap-expect=2"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.05'
+          memory: 128M
+
+  consul-client:
+    image: hashicorp/consul:1.11.5
+    container_name: consul-client
+    restart: always
+    volumes:
+      - ./resources/consul/client.json:/consul/config/client.json:ro
+      - ./resources/consul/certs/:/consul/config/certs/:ro     
+    networks:
+      - consul
+    command: "agent"
+
+  # Define web service 
+  web:
+    image: nicholasjackson/fake-service:v0.23.1
+    labels:
+      - com.github.njasm.clerk.always_register=true
+      - com.github.njasm.clerk.consul.tags=primary
+      # Consul HTTP check
+      - com.github.njasm.clerk.consul.check.http=/v1/api/health
+      - com.github.njasm.clerk.consul.check.interval=15s  # optional, Consul default used otherwise
+      - com.github.njasm.clerk.consul.check.timout=2s     # optional, Consul default used otherwise
+      - com.github.njasm.clerk.consul.check.method=HEAD 	# optional, Consul default used otherwise
+    environment:
+      LISTEN_ADDR: 0.0.0.0:9090
+      NAME: "web"
+      SERVER_TYPE: "http"
+      UPSTREAM_URIS: "http://localhost:9091"
+      MESSAGE: "Hello World"
+      HEALTH_CHECK_RESPONSE_CODE: "200"
+      #CONSUL_SERVER: 10.5.0.2
+      #CONSUL_DATACENTER: "dc1"
+      #CENTRAL_CONFIG_DIR: /central
+      #SERVICE_ID: "web-v1"
+    #volumes:
+    #  - "./service_config/web_v1.hcl:/config/web_v1.hcl"
+    #  - "./central_config:/central"
+    ports:
+      - "9090:9090"
+
+networks:
+  consul:
+    driver: bridge
