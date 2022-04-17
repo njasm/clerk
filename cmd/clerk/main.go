@@ -7,6 +7,7 @@ import (
 	"syscall"
 
 	clerk "github.com/njasm/clerk/internal"
+	registry "github.com/njasm/clerk/internal/registry"
 )
 
 func main() {
@@ -22,11 +23,13 @@ func main() {
 		stopServer <- true
 	}(stop, osSignal)
 
-	server, err := clerk.New(stop)
+	r, err := registry.NewConsul()
+	ExitOnError(err)
+
+	server, err := clerk.New(stop, r)
 	ExitOnError(err)
 
 	server.Start()
-
 }
 
 func ExitOnError(e error) {

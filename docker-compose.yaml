@@ -85,8 +85,9 @@ services:
   web:
     image: nicholasjackson/fake-service:v0.23.1
     labels:
-      - com.github.njasm.clerk.always_register=true
-      - com.github.njasm.clerk.consul.tags=primary
+      - com.github.njasm.clerk.register=true  # true, false, Should register this service? 
+      - com.github.njasm.clerk.tags=primary,test
+      - com.github.njasm.clerk.attributes=region:eu-west-1,env:staging
       # Consul HTTP check
       - com.github.njasm.clerk.consul.check.http=/v1/api/health
       - com.github.njasm.clerk.consul.check.interval=15s  # optional, Consul default used otherwise

@@ -3,6 +3,7 @@ package clerk
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -13,8 +14,6 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	dockerapi "github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
-
-	consulapi "github.com/hashicorp/consul/api"
 )
 
 type Server struct {
@@ -22,10 +21,10 @@ type Server struct {
 	dockerMessagesChannel <-chan events.Message
 	dockerErrorChannel    <-chan error
 	stopServerChannel     <-chan bool
-	consulClient          *consulapi.Client
+	registry              Registry
 }
 
-func New(stopServer <-chan bool) (*Server, error) {
+func New(stopServer <-chan bool, registry Registry) (*Server, error) {
 	client, err := dockerapi.NewClientWithOpts(dockerapi.FromEnv)
 	if err != nil {
 		return nil, err
@@ -39,17 +38,12 @@ func New(stopServer <-chan bool) (*Server, error) {
 		),
 	})
 
-	consulClient, err := GetConsulClient()
-	if err != nil {
-		return nil, err
-	}
-
 	return &Server{
 		dockerClient:          client,
 		dockerMessagesChannel: chMessages,
 		dockerErrorChannel:    chErrors,
 		stopServerChannel:     stopServer,
-		consulClient:          consulClient,
+		registry:              registry,
 	}, nil
 }
 
@@ -74,20 +68,20 @@ func (s *Server) Start() {
 			}
 
 			println()
-			/*
-				if data.Status == "start" && data.Type == "container" {
-					Register(consulClient, data)
-					if err != nil {
-						err = fmt.Errorf("error: %w", err)
-						fmt.Println(err)
-					}
-				}
-			*/
-			if data.Status == "die" && data.Type == "container" {
-				err := Deregister(s.consulClient, data.Actor.ID)
+
+			if data.Status == "start" && data.Type == "container" {
+				err := s.register(data.Actor.ID)
 				if err != nil {
 					err = fmt.Errorf("error: %w", err)
 					fmt.Println(err)
+				}
+			}
+
+			if data.Status == "die" && data.Type == "container" {
+				err := s.unregister(data.Actor.ID)
+				if err != nil {
+					err = fmt.Errorf("error: %w", err)
+					log.Println(err)
 				}
 			}
 
@@ -101,13 +95,17 @@ func (s *Server) Start() {
 			fmt.Println("TIMER TICK - SYNCHRONIZATION")
 
 			containers, err := s.dockerClient.ContainerList(context.Background(), types.ContainerListOptions{})
-			ExitOnError(err)
+			if err != nil {
+				err = fmt.Errorf("error: %w", err)
+				fmt.Println(err)
+				continue
+			}
 
 			for _, v := range containers {
 				fmt.Printf("%+v\n", v)
 			}
 
-			err = Synchronise(s.consulClient, s.dockerClient, containers)
+			err = s.synchronise(containers)
 			if err != nil {
 				err = fmt.Errorf("error: %w", err)
 				fmt.Println(err)
@@ -130,80 +128,115 @@ func (s *Server) Start() {
 	}
 }
 
-func GetConsulClient() (*consulapi.Client, error) {
-	config := consulapi.DefaultConfig()
-	return consulapi.NewClient(config)
-}
-
-func Register(client *consulapi.Client, data events.Message) error {
-	containerName := strings.TrimLeft(data.Actor.Attributes["name"], "/")
-	registration := consulapi.AgentServiceRegistration{
-		Kind: consulapi.ServiceKindTypical,
-		Name: containerName,
-		ID:   data.Actor.ID,
-	}
-
-	return registerInAgent(client, &registration)
-}
-
-func registerInAgent(client *consulapi.Client, registration *consulapi.AgentServiceRegistration) error {
-	return client.Agent().ServiceRegister(registration)
-}
-
-func Deregister(client *consulapi.Client, serviceID string) error {
-	return client.Agent().ServiceDeregister(serviceID)
-}
-
-func Synchronise(client *consulapi.Client, docker DockerAPIClient, containers []types.Container) error {
-	if len(containers) == 0 {
-		return nil
-	}
-
-	services, err := client.Agent().Services()
+func (s *Server) register(containerID string) error {
+	services, err := s.containerToService(containerID)
 	if err != nil {
 		return err
 	}
 
-	for _, container := range containers {
-		service, exist := services[container.ID]
-		if exist {
-			fmt.Printf("%+v", service)
+	for _, service := range services {
+		if !service.Register() {
+			return nil
+		}
+
+		err = s.registry.Register(service)
+		if err != nil {
+			log.Println(fmt.Errorf("error registering service: %w", err))
+			err = nil
+		}
+
+	}
+
+	return nil
+}
+
+func (s *Server) unregister(containerID string) error {
+	services, err := s.containerToService(containerID)
+	if err != nil {
+		return err
+	}
+
+	for _, service := range services {
+		err = s.registry.Unregister(service)
+		if err != nil {
+			log.Println(fmt.Errorf("error unregistering service: %w", err))
+			err = nil
+		}
+	}
+
+	return nil
+}
+
+func (s *Server) containerToService(containerID string) ([]*Service, error) {
+	containerJson, err := s.dockerClient.ContainerInspect(context.TODO(), containerID)
+	if err != nil {
+		return nil, err
+	}
+
+	config := map[string]string{}
+	for key, value := range containerJson.Config.Labels {
+		key := strings.ToLower(key)
+		if strings.HasPrefix(key, "com.github.njasm.clerk.") {
+			config[key] = value
+		}
+	}
+
+	rv := []*Service{}
+	serviceName := strings.TrimLeft(containerJson.Name, "/")
+	for key := range containerJson.Config.ExposedPorts {
+		proto, port := nat.SplitProtoPort(string(key))
+		intPort, err := strconv.Atoi(port)
+		if err != nil {
 			continue
 		}
 
-		containerJson, err := docker.ContainerInspect(context.TODO(), container.ID)
+		serviceID := fmt.Sprintf("%v:%v:%v:%v", serviceName, proto, port, containerJson.Config.Hostname)
+
+		for _, networkValue := range containerJson.NetworkSettings.Networks {
+			if networkValue == nil {
+				continue
+			}
+
+			if networkValue.IPAddress == "" {
+				continue
+			}
+
+			service := Service{
+				ID:     serviceID,
+				Name:   serviceName,
+				IP:     networkValue.IPAddress,
+				Port:   intPort,
+				Proto:  proto,
+				Config: config,
+			}
+
+			rv = append(rv, &service)
+		}
+
+	}
+
+	return rv, nil
+}
+
+func (s *Server) synchronise(containers []types.Container) error {
+	if len(containers) == 0 {
+		return nil
+	}
+
+	services, err := s.registry.Services()
+	fmt.Println(services)
+	if err != nil {
+		err = fmt.Errorf("error getting services from registry: %w", err)
+		fmt.Println(err)
+		return err
+	}
+
+	for _, container := range containers {
+		err := s.register(container.ID)
 		if err != nil {
 			err = fmt.Errorf("error: %w", err)
 			fmt.Println(err)
 			continue
-		}
-
-		serviceName := strings.TrimLeft(containerJson.Name, "/")
-		for key := range containerJson.Config.ExposedPorts {
-			proto, port := nat.SplitProtoPort(string(key))
-			intPort, err := strconv.Atoi(port)
-			if err != nil {
-				continue
-			}
-
-			serviceID := fmt.Sprintf("%v:%v:%v:%v", serviceName, proto, port, containerJson.Config.Hostname)
-
-			for _, networkValue := range containerJson.NetworkSettings.Networks {
-				ipAddress := networkValue.IPAddress
-				registration := consulapi.AgentServiceRegistration{
-					Kind:    consulapi.ServiceKindTypical,
-					Name:    serviceName,
-					ID:      serviceID,
-					Address: ipAddress,
-					Port:    intPort,
-				}
-
-				err = registerInAgent(client, &registration)
-				if err != nil {
-					return err
-				}
-			}
-
 		}
 	}
 
