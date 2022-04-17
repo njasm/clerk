@@ -41,3 +41,8 @@ func (s *Service) Register() bool {
 
 	return false
 }
+
+func (s *Service) GetConfig(keySuffix string) string {
+	key := "com.github.njasm.clerk." + keySuffix
+	return s.Config[key]
+}

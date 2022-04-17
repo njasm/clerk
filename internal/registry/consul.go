@@ -57,6 +57,7 @@ func (c *Consul) Register(service *clerk.Service) error {
 		}
 	}
 
+	check := agentServiceCheck(service)
 	config := convertMetadataKeys(service.Config)
 	registration := consulapi.AgentServiceRegistration{
 		Kind:    consulapi.ServiceKindTypical,
@@ -66,6 +67,7 @@ func (c *Consul) Register(service *clerk.Service) error {
 		Port:    service.Port,
 		Tags:    tags,
 		Meta:    config,
+		Check:   check,
 	}
 
 	return c.client.Agent().ServiceRegister(&registration)
@@ -121,4 +123,68 @@ func metadataReplace(m map[string]string, old, new string) map[string]string {
 	}
 
 	return rv
+}
+
+func agentServiceCheck(service *clerk.Service) *consulapi.AgentServiceCheck {
+	check := new(consulapi.AgentServiceCheck)
+	if path := service.GetConfig("consul.check.http"); path != "" {
+		check.HTTP = fmt.Sprintf("http://%s:%d%s", service.IP, service.Port, path)
+	}
+
+	if path := service.GetConfig("consul.check.https"); path != "" {
+		check.HTTP = fmt.Sprintf("https://%s:%d%s", service.IP, service.Port, path)
+	}
+
+	if check.HTTP != "" {
+		if method := service.GetConfig("consul.check.method"); method != "" {
+			check.Method = method
+		}
+	}
+
+	if tcp := service.GetConfig("consul.check.tcp"); tcp != "" {
+		check.TCP = fmt.Sprintf("%s:%d", service.IP, service.Port)
+	}
+
+	if grpc := service.GetConfig("consul.check.grpc"); grpc != "" {
+		check.GRPC = fmt.Sprintf("%s:%d", service.IP, service.Port)
+		if useTLS := service.GetConfig("consule.check.grpc.tls"); useTLS != "" {
+			if strings.Trim(strings.ToLower(useTLS), " ") == "true" {
+				check.GRPCUseTLS = true
+
+				if tlsSkipVerify := service.GetConfig("consul.check.tls.skip.verify"); tlsSkipVerify != "" {
+					if strings.Trim(strings.ToLower(tlsSkipVerify), " ") == "true" {
+						check.TLSSkipVerify = true
+					} else {
+						check.TLSSkipVerify = false
+					}
+				}
+
+			} else {
+				check.GRPCUseTLS = false
+				check.TLSSkipVerify = true
+			}
+		}
+	}
+
+	//TODO: check initial status, check cmd, check script, check TTL
+
+	if check.HTTP != "" || check.TCP != "" || check.GRPC != "" {
+		if timeout := service.GetConfig("consul.check.timout"); timeout != "" {
+			check.Timeout = timeout
+		} else {
+			check.Timeout = "2s"
+		}
+
+		if interval := service.GetConfig("consul.check.interval"); interval != "" {
+			check.Interval = interval
+		} else {
+			check.Interval = "10s"
+		}
+	}
+
+	if after := service.GetConfig("consul.check.deregister.after"); after != "" {
+		check.DeregisterCriticalServiceAfter = after
+	}
+
+	return check
 }

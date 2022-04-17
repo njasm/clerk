@@ -89,15 +89,15 @@ services:
       - com.github.njasm.clerk.tags=primary,test
       - com.github.njasm.clerk.attributes=region:eu-west-1,env:staging
       # Consul HTTP check
-      - com.github.njasm.clerk.consul.check.http=/v1/api/health
-      - com.github.njasm.clerk.consul.check.interval=15s  # optional, Consul default used otherwise
+      - com.github.njasm.clerk.consul.check.http=/health
+      - com.github.njasm.clerk.consul.check.interval=10s  # optional, Consul default used otherwise
       - com.github.njasm.clerk.consul.check.timout=2s     # optional, Consul default used otherwise
-      - com.github.njasm.clerk.consul.check.method=HEAD 	# optional, Consul default used otherwise
+      - com.github.njasm.clerk.consul.check.method=GET 	# optional, Consul default used otherwise
     environment:
       LISTEN_ADDR: 0.0.0.0:9090
       NAME: "web"
       SERVER_TYPE: "http"
-      UPSTREAM_URIS: "http://localhost:9091"
+      #UPSTREAM_URIS: "http://localhost:9091"
       MESSAGE: "Hello World"
       HEALTH_CHECK_RESPONSE_CODE: "200"
       #CONSUL_SERVER: 10.5.0.2
@@ -107,6 +107,8 @@ services:
     #volumes:
     #  - "./service_config/web_v1.hcl:/config/web_v1.hcl"
     #  - "./central_config:/central"
+    networks:
+      - consul
     ports:
       - "9090:9090"
 
