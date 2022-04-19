@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -203,29 +204,10 @@ func (s *Service) setInstances() *Service {
 	ports, ok := s.GetConfig(constants.CONFIG_SERVICE_PORTS)
 	if ports != "" && ok {
 		for _, portProtoPair := range strings.Split(ports, ",") {
-			proto, port := nat.SplitProtoPort(portProtoPair)
-			intPort, err := strconv.Atoi(port)
+			err := instance(s, portProtoPair)
 			if err != nil {
+				fmt.Println(fmt.Errorf("error: %w", err))
 				continue
-			}
-
-			serviceID := fmt.Sprintf("%v:%v:%v:%v", s.name, proto, port, s.container.Config.Hostname)
-			for _, networkValue := range s.container.NetworkSettings.Networks {
-				if networkValue == nil {
-					continue
-				}
-
-				// set Service ID to the first instance ID
-				if s.id == "" {
-					s.id = serviceID
-				}
-
-				s.instances[serviceID] = Instance{
-					ID:    serviceID,
-					IP:    networkValue.IPAddress,
-					Port:  intPort,
-					Proto: proto,
-				}
 			}
 		}
 
@@ -233,33 +215,47 @@ func (s *Service) setInstances() *Service {
 	}
 
 	for portProtoPair := range s.container.Config.ExposedPorts {
-		proto, port := nat.SplitProtoPort(string(portProtoPair))
-		intPort, err := strconv.Atoi(port)
+		rawPort := string(portProtoPair)
+		err := instance(s, rawPort)
 		if err != nil {
+			fmt.Println(fmt.Errorf("error: %w", err))
 			continue
-		}
-
-		serviceID := fmt.Sprintf("%v:%v:%v:%v", s.name, proto, port, s.container.Config.Hostname)
-		for _, networkValue := range s.container.NetworkSettings.Networks {
-			if networkValue == nil {
-				continue
-			}
-
-			// set Service ID to the first instance ID
-			if s.id == "" {
-				s.id = serviceID
-			}
-
-			s.instances[serviceID] = Instance{
-				ID:    serviceID,
-				IP:    networkValue.IPAddress,
-				Port:  intPort,
-				Proto: proto,
-			}
 		}
 	}
 
 	return s
+}
+
+var ErrAtoi = errors.New("Converting to int")
+var ErrNoNetworkEndpointSettings = errors.New("No network endpoint settings")
+
+func instance(s *Service, rawPort string) error {
+	proto, port := nat.SplitProtoPort(rawPort)
+	intPort, err := strconv.Atoi(port)
+	if err != nil {
+		return ErrAtoi
+	}
+
+	serviceID := fmt.Sprintf("%v:%v:%v:%v", s.name, proto, port, s.container.Config.Hostname)
+	for _, networkValue := range s.container.NetworkSettings.Networks {
+		if networkValue == nil {
+			return ErrNoNetworkEndpointSettings
+		}
+
+		// set Service ID to the first instance ID
+		if s.id == "" {
+			s.id = serviceID
+		}
+
+		s.instances[serviceID] = Instance{
+			ID:    serviceID,
+			IP:    networkValue.IPAddress,
+			Port:  intPort,
+			Proto: proto,
+		}
+	}
+
+	return nil
 }
 
 func trimAndLowerString(data string) string {
