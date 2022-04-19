@@ -5,15 +5,13 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
 	dockerapi "github.com/docker/docker/client"
-	"github.com/docker/go-connections/nat"
+	"github.com/njasm/clerk/internal/service"
 )
 
 type Server struct {
@@ -101,10 +99,6 @@ func (s *Server) Start() {
 				continue
 			}
 
-			for _, v := range containers {
-				fmt.Printf("%+v\n", v)
-			}
-
 			err = s.synchronise(containers)
 			if err != nil {
 				err = fmt.Errorf("error: %w", err)
@@ -129,93 +123,46 @@ func (s *Server) Start() {
 }
 
 func (s *Server) register(containerID string) error {
-	services, err := s.containerToService(containerID)
+	service, err := s.containerToService(containerID)
 	if err != nil {
 		return err
 	}
 
-	for _, service := range services {
-		if !service.Register() {
-			return nil
-		}
+	if !service.Register() {
+		return nil
+	}
 
-		err = s.registry.Register(service)
-		if err != nil {
-			log.Println(fmt.Errorf("error registering service: %w", err))
-			err = nil
-		}
-
+	err = s.registry.Register(service)
+	if err != nil {
+		log.Println(fmt.Errorf("error registering service: %w", err))
+		err = nil
 	}
 
 	return nil
 }
 
 func (s *Server) unregister(containerID string) error {
-	services, err := s.containerToService(containerID)
+	service, err := s.containerToService(containerID)
 	if err != nil {
 		return err
 	}
 
-	for _, service := range services {
-		err = s.registry.Unregister(service)
-		if err != nil {
-			log.Println(fmt.Errorf("error unregistering service: %w", err))
-			err = nil
-		}
+	err = s.registry.Unregister(service)
+	if err != nil {
+		log.Println(fmt.Errorf("error unregistering service: %w", err))
+		err = nil
 	}
 
 	return nil
 }
 
-func (s *Server) containerToService(containerID string) ([]*Service, error) {
+func (s *Server) containerToService(containerID string) (*service.Service, error) {
 	containerJson, err := s.dockerClient.ContainerInspect(context.TODO(), containerID)
 	if err != nil {
 		return nil, err
 	}
 
-	config := map[string]string{}
-	for key, value := range containerJson.Config.Labels {
-		key := strings.ToLower(key)
-		if strings.HasPrefix(key, "com.github.njasm.clerk.") {
-			config[key] = value
-		}
-	}
-
-	rv := []*Service{}
-	serviceName := strings.TrimLeft(containerJson.Name, "/")
-	for key := range containerJson.Config.ExposedPorts {
-		proto, port := nat.SplitProtoPort(string(key))
-		intPort, err := strconv.Atoi(port)
-		if err != nil {
-			continue
-		}
-
-		serviceID := fmt.Sprintf("%v:%v:%v:%v", serviceName, proto, port, containerJson.Config.Hostname)
-
-		for _, networkValue := range containerJson.NetworkSettings.Networks {
-			if networkValue == nil {
-				continue
-			}
-
-			if networkValue.IPAddress == "" {
-				continue
-			}
-
-			service := Service{
-				ID:     serviceID,
-				Name:   serviceName,
-				IP:     networkValue.IPAddress,
-				Port:   intPort,
-				Proto:  proto,
-				Config: config,
-			}
-
-			rv = append(rv, &service)
-		}
-
-	}
-
-	return rv, nil
+	return service.NewFrom(containerJson), nil
 }
 
 func (s *Server) synchronise(containers []types.Container) error {
@@ -223,8 +170,7 @@ func (s *Server) synchronise(containers []types.Container) error {
 		return nil
 	}
 
-	services, err := s.registry.Services()
-	fmt.Println(services)
+	_, err := s.registry.Services()
 	if err != nil {
 		err = fmt.Errorf("error getting services from registry: %w", err)
 		fmt.Println(err)

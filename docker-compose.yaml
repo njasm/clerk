@@ -86,6 +86,7 @@ services:
     image: nicholasjackson/fake-service:v0.23.1
     labels:
       - com.github.njasm.clerk.register=true  # true, false, Should register this service? 
+      - com.github.njasm.clerk.name=basic-web-service-name # define service name
       - com.github.njasm.clerk.tags=primary,test
       - com.github.njasm.clerk.attributes=region:eu-west-1,env:staging
       # Consul HTTP check
@@ -97,9 +98,9 @@ services:
       LISTEN_ADDR: 0.0.0.0:9090
       NAME: "web"
       SERVER_TYPE: "http"
-      #UPSTREAM_URIS: "http://localhost:9091"
       MESSAGE: "Hello World"
       HEALTH_CHECK_RESPONSE_CODE: "200"
+      #UPSTREAM_URIS: "http://localhost:9091"
       #CONSUL_SERVER: 10.5.0.2
       #CONSUL_DATACENTER: "dc1"
       #CENTRAL_CONFIG_DIR: /central
@@ -111,6 +112,78 @@ services:
       - consul
     ports:
       - "9090:9090"
+    deploy:
+      replicas: 1
+      placement:
+        max_replicas_per_node: 2
+      resources:
+        limits:
+          cpus: '0.20'
+          memory: 64M
+        reservations:
+          cpus: '0.01'
+          memory: 32M
+
+  # Define internal, no exported ports service
+  web-no-exported:
+    image: nicholasjackson/fake-service:v0.23.1
+    labels:
+      - com.github.njasm.clerk.register=true  # true, false, Should register this service? 
+      - com.github.njasm.clerk.name=web-no-exported  # service name to use in registration.
+      - com.github.njasm.clerk.ports=9091/tcp  # ports to register in the service. override any exported ports definitions
+      - com.github.njasm.clerk.tags=primary,test
+      - com.github.njasm.clerk.attributes=region:eu-west-1,env:staging
+      # Consul HTTP check
+      - com.github.njasm.clerk.consul.check.http=/health
+      - com.github.njasm.clerk.consul.check.interval=10s  # optional, Consul default used otherwise
+      - com.github.njasm.clerk.consul.check.timout=2s     # optional, Consul default used otherwise
+      - com.github.njasm.clerk.consul.check.method=GET 	# optional, Consul default used otherwise
+    environment:
+      LISTEN_ADDR: 0.0.0.0:9091
+      NAME: "web"
+      SERVER_TYPE: "http"
+      MESSAGE: "Hello World"
+      HEALTH_CHECK_RESPONSE_CODE: "200"
+    networks:
+      - consul
+    # no exported ports
+    #ports:
+    #  - "9090:9090"
+    deploy:
+      replicas: 2
+      placement:
+        max_replicas_per_node: 2
+      resources:
+        limits:
+          cpus: '0.20'
+          memory: 64M
+        reservations:
+          cpus: '0.01'
+          memory: 32M
+
+  # GRPC health checker 
+  web-grpc:
+    image: nicholasjackson/fake-service:v0.23.1
+    labels:
+      - com.github.njasm.clerk.register=true  # true, false, Should register this service? 
+      - com.github.njasm.clerk.tags=primary,test
+      - com.github.njasm.clerk.attributes=region:eu-west-1,env:staging
+      # Consul HTTP check
+      - com.github.njasm.clerk.consul.check.grpc=true
+      - com.github.njasm.clerk.consul.check.grpc.tls=false
+      - com.github.njasm.clerk.consul.check.grpc.tls.skip.verify=true
+      - com.github.njasm.clerk.consul.check.interval=10s  # optional, Consul default used otherwise
+      - com.github.njasm.clerk.consul.check.timout=2s     # optional, Consul default used otherwise
+    environment:
+      LISTEN_ADDR: 0.0.0.0:9095
+      NAME: "web-grppc"
+      SERVER_TYPE: "grpc"
+      MESSAGE: "Hello World gRPC"
+      HEALTH_CHECK_RESPONSE_CODE: "200"
+    networks:
+      - consul
+    ports:
+      - "9095:9095"      
 
 networks:
   consul:
