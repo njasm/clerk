@@ -1,0 +1,72 @@
+name: CI
+on:
+  push:
+    branches:
+      - master
+      - staging
+      - trying
+  pull_request: {}
+
+jobs:
+  # TODO: drop it when GitHub supports its by itself
+  cancel-previous:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel Previous Runs
+        uses: styfle/cancel-workflow-action@0.9.1
+        with:
+          access_token: ${{ github.token }}
+
+  linux:
+    name: ubuntu
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest ]
+        go: [ 1.17.x, 1.18.x ]
+    runs-on: ${{ matrix.os }}
+    env:
+    steps:
+      - name: Set up golang
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ matrix.go }}
+      - run: go version
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v3
+
+      - name: Run Tests
+        run: go test -test.v -race -coverprofile=coverage.txt -covermode=atomic
+
+      - name: Convert coverage to lcov
+        uses: jandelgado/gcov2lcov-action@v1.0.8
+        with:
+          infile: coverage.txt
+          outfile: coverage.lcov
+
+      - name: Code Coverage
+        uses: coverallsapp/github-action@v1.1.2
+        with:
+          github-token: ${{ secrets.github_token }}
+          path-to-lcov: coverage.lcov
+          flag-name: run-${{ matrix.os }}-ubuntu-latest
+          parallel: true
+
+  code-coverage:
+    needs: linux
+    runs-on: ubuntu-latest
+    steps:
+      - name: Coveralls Finished
+        uses: coverallsapp/github-action@master
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          parallel-finished: true
+
+  ci-pass:
+    name: 'ci-pass'
+    runs-on: "ubuntu-latest"
+    needs: linux
+    steps:
+      - name: "Merge into master"
+        run: exit 0
