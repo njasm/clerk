@@ -226,8 +226,8 @@ func (s *Service) setInstances() *Service {
 	return s
 }
 
-var ErrAtoi = errors.New("Converting to int")
-var ErrNoNetworkEndpointSettings = errors.New("No network endpoint settings")
+var ErrAtoi = errors.New("converting to int")
+var ErrNoNetworkEndpointSettings = errors.New("no network endpoint settings")
 
 func instance(s *Service, rawPort string) error {
 	proto, port := nat.SplitProtoPort(rawPort)
