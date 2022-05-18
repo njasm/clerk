@@ -13,7 +13,7 @@ import (
 
 const consulID = "consul"
 
-var ErrServiceIsNil = errors.New("Service is nil")
+var ErrServiceIsNil = errors.New("service is nil")
 
 func NewConsul() (clerk.Registry, error) {
 	config := consulapi.DefaultConfig()
