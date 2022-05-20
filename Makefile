@@ -16,8 +16,8 @@ lint:
 
 run-tests:
 	@echo "=> Running go test..."
-	go test -test.v -race -coverprofile=coverage.out -covermode=atomic ./...
-	go tool cover -func=coverage.out
+	go test -test.v -race -coverprofile=coverage.txt -covermode=atomic ./...
+	go tool cover -func=coverage.txt
 
 clean:
 	@test -f coverage.out && rm -f coverage.out || exit 0

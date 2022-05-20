@@ -35,19 +35,18 @@ jobs:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v3
 
-      - name: Run Vet
-        run: make vet
-
-      - name: Run staticcheck
-        run: make lint
-
-      - name: Run Tests
-        run: make run-tests
+      - name: Run Tests all
+        run: |
+          echo $GOROOT
+          export GOROOTBKUP=$(echo $GOROOT)
+          echo $GOROOTBKUP
+          make test-all
+          export GOROOT=$GOROOTBKUP
 
       - name: Convert coverage to lcov
         uses: jandelgado/gcov2lcov-action@v1.0.9
         with:
-          infile: coverage.out
+          infile: coverage.txt
           outfile: coverage.lcov
 
       - name: Code Coverage
