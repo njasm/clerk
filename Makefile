@@ -6,7 +6,7 @@ test-all: vet lint run-tests clean
 
 vet:
 	@echo "=> Running vet..."
-	go vet ./...
+	go vet -tests ./...
 
 lint:
 	@echo "=> Running staticcheck..."
