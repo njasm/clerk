@@ -1,7 +1,7 @@
 ##
 ## Build
 ##
-FROM golang:1.18.1-bullseye AS build
+FROM golang:1.18.2-bullseye AS build
 
 ENV GOPATH /go
 WORKDIR /go/clerk
