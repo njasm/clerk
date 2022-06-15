@@ -3,7 +3,7 @@ module github.com/njasm/clerk
 go 1.18
 
 require (
-	github.com/docker/docker v20.10.16+incompatible
+	github.com/docker/docker v20.10.17+incompatible
 	github.com/docker/go-connections v0.4.0
 	github.com/hashicorp/consul/api v1.13.0
 	github.com/stretchr/testify v1.7.1
