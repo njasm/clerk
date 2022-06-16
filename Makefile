@@ -20,4 +20,4 @@ run-tests:
 	go tool cover -func=coverage.txt
 
 clean:
-	@test -f coverage.out && rm -f coverage.out || exit 0
+	@test -f coverage.txt && rm -f coverage.txt || exit 0
