@@ -36,7 +36,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Run Tests all
-        run: make test-all && ls -sl
+        run: make test-all
 
       - name: Convert coverage to lcov
         uses: jandelgado/gcov2lcov-action@v1.0.9

@@ -2,7 +2,7 @@
 
 .DEFAULT: test-all
 
-test-all: vet lint run-tests clean
+test-all: vet lint run-tests
 
 vet:
 	@echo "=> Running vet..."
