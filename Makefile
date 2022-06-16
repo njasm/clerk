@@ -2,7 +2,7 @@
 
 .DEFAULT: test-all
 
-test-all: vet lint run-tests clean
+test-all: vet lint run-tests
 
 vet:
 	@echo "=> Running vet..."
@@ -20,4 +20,4 @@ run-tests:
 	go tool cover -func=coverage.txt
 
 clean:
-	@test -f coverage.out && rm -f coverage.out || exit 0
+	@test -f coverage.txt && rm -f coverage.txt || exit 0

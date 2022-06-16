@@ -16,7 +16,6 @@ services:
     depends_on:
       - consul1
       - consul2
-      - consul-client
     deploy:
       resources:
         limits:
@@ -70,16 +69,16 @@ services:
           cpus: '0.05'
           memory: 128M
 
-  consul-client:
-    image: hashicorp/consul:1.11.5
-    container_name: consul-client
-    restart: always
-    volumes:
-      - ./resources/consul/client.json:/consul/config/client.json:ro
-      - ./resources/consul/certs/:/consul/config/certs/:ro     
-    networks:
-      - consul
-    command: "agent"
+  # consul-client:
+  #   image: hashicorp/consul:1.11.5
+  #   container_name: consul-client
+  #   restart: always
+  #   volumes:
+  #     - ./resources/consul/client.json:/consul/config/client.json:ro
+  #     - ./resources/consul/certs/:/consul/config/certs/:ro     
+  #   networks:
+  #     - consul
+  #   command: "agent"
 
   # Define web service 
   web:
@@ -125,13 +124,12 @@ services:
           memory: 32M
 
   # Define internal, no exported ports service
-  web-no-exported:
+  web-no-ports-exported:
     image: nicholasjackson/fake-service:v0.23.1
     labels:
       - com.github.njasm.clerk.register=true  # true, false, Should register this service? 
-      - com.github.njasm.clerk.name=web-no-exported  # service name to use in registration.
       - com.github.njasm.clerk.ports=9091/tcp  # ports to register in the service. override any exported ports definitions
-      - com.github.njasm.clerk.tags=primary,test
+      - com.github.njasm.clerk.tags=no-ports-exported
       - com.github.njasm.clerk.attributes=region:eu-west-1,env:staging
       # Consul HTTP check
       - com.github.njasm.clerk.consul.check.http=/health
@@ -146,9 +144,6 @@ services:
       HEALTH_CHECK_RESPONSE_CODE: "200"
     networks:
       - consul
-    # no exported ports
-    #ports:
-    #  - "9090:9090"
     deploy:
       replicas: 2
       placement:
@@ -161,19 +156,10 @@ services:
           cpus: '0.01'
           memory: 32M
 
-  # GRPC health checker 
-  web-grpc:
+  web-grpc-no-register:
     image: nicholasjackson/fake-service:v0.23.1
     labels:
-      - com.github.njasm.clerk.register=true  # true, false, Should register this service? 
-      - com.github.njasm.clerk.tags=primary,test
-      - com.github.njasm.clerk.attributes=region:eu-west-1,env:staging
-      # Consul HTTP check
-      - com.github.njasm.clerk.consul.check.grpc=true
-      - com.github.njasm.clerk.consul.check.grpc.tls=false
-      - com.github.njasm.clerk.consul.check.grpc.tls.skip.verify=true
-      - com.github.njasm.clerk.consul.check.interval=10s  # optional, Consul default used otherwise
-      - com.github.njasm.clerk.consul.check.timout=2s     # optional, Consul default used otherwise
+      - com.github.njasm.clerk.register=false  # true, false, Should register this service? 
     environment:
       LISTEN_ADDR: 0.0.0.0:9095
       NAME: "web-grppc"
