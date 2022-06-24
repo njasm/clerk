@@ -6,7 +6,7 @@ require (
 	github.com/docker/docker v20.10.17+incompatible
 	github.com/docker/go-connections v0.4.0
 	github.com/hashicorp/consul/api v1.13.0
-	github.com/stretchr/testify v1.7.2
+	github.com/stretchr/testify v1.7.5
 )
 
 require (
@@ -36,7 +36,6 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
-	github.com/stretchr/objx v0.3.0 // indirect
 	golang.org/x/net v0.0.0-20220526153639-5463443f8c37 // indirect
 	golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a // indirect
 	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac // indirect
