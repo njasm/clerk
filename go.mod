@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/docker/docker v20.10.18+incompatible
 	github.com/docker/go-connections v0.4.0
-	github.com/hashicorp/consul/api v1.14.0
+	github.com/hashicorp/consul/api v1.15.2
 	github.com/stretchr/testify v1.8.0
 )
 
